@@ -13,7 +13,10 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 
 W, H = 1024, 1024
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "entry.png")
+# In the grader the repo is mounted read-only at /bot, so the image must go
+# to $MAKEFUN_OUTPUT_DIR (/output) instead of next to this script; locally
+# (env var unset) it still lands next to the script, as before.
+OUT = os.path.join(os.environ.get("MAKEFUN_OUTPUT_DIR", os.path.dirname(os.path.abspath(__file__))), "entry.png")
 
 # ---------------------------------------------------------------- palette
 NAVY = (46, 52, 104)
