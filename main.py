@@ -530,31 +530,34 @@ def wrap(s, maxw, scale=0.6, spacing=1):
 # A PNG file is a signature followed by length-tagged chunks, each with
 # a CRC32 over its tag and payload. Pixels go in as filter-0 scanlines
 # (one leading zero byte per row) compressed with zlib.
-PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+def _png_sig():
+    # PNG magic: 137 'P' 'N' 'G' CR LF 26 LF.
+    return bytes([137, 80, 78, 71, 13, 10, 26, 10])
 
 
-def _png_chunk(tag, payload):
-    size = struct.pack(">I", len(payload))
-    check = struct.pack(">I", zlib.crc32(tag + payload) & 0xffffffff)
-    return size + tag + payload + check
+def _chunk(tag, data):
+    body = tag + data
+    return (struct.pack(">I", len(data)) + body +
+            struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF))
 
 
 def _png_bytes(cv):
-    scanlines = bytearray()
-    row_len = cv.w * 3
-    for row in range(cv.h):
-        scanlines.append(0)
-        scanlines += cv.buf[row * row_len:(row + 1) * row_len]
-    header = struct.pack(">IIBBBBB", cv.w, cv.h, 8, 2, 0, 0, 0)
-    return (PNG_SIGNATURE +
-            _png_chunk(b"IHDR", header) +
-            _png_chunk(b"IDAT", zlib.compress(bytes(scanlines), 6)) +
-            _png_chunk(b"IEND", b""))
+    rows = []
+    stride = cv.w * 3
+    for r in range(cv.h):
+        rows.append(b"\x00" + bytes(cv.buf[r * stride:(r + 1) * stride]))
+    packed = b"".join(rows)
+    # IHDR payload: width, height (4 bytes each), then bit depth 8,
+    # colour type 2 (truecolour RGB), compression 0, filter 0, interlace 0.
+    ihdr = struct.pack(">II", cv.w, cv.h) + bytes([8, 2, 0, 0, 0])
+    return (_png_sig() + _chunk(b"IHDR", ihdr) +
+            _chunk(b"IDAT", zlib.compress(packed, 6)) +
+            _chunk(b"IEND", b""))
 
 
 def write_png(path, cv):
-    with open(path, "wb") as handle:
-        handle.write(_png_bytes(cv))
+    with open(path, "wb") as f:
+        f.write(_png_bytes(cv))
 
 # ------------------------------------------------------------- mini flags
 def uk_flag(cv, x, y, w, h):
@@ -899,14 +902,15 @@ def build(cv):
     cv.rect(0, 1012, W, 12, NAVY)
 
 
+def _out_dir():
+    here = os.path.dirname(os.path.abspath(__file__))
+    return os.environ.get("MAKEFUN_OUTPUT_DIR", here)
+
+
 def main():
     cv = Canvas(W, H, CREAM)
     build(cv)
-    out = os.path.join(
-        os.environ.get("MAKEFUN_OUTPUT_DIR",
-                       os.path.dirname(os.path.abspath(__file__))),
-        "entry.png")
-    write_png(out, cv)
+    write_png(os.path.join(_out_dir(), "entry.png"), cv)
 
 
 if __name__ == "__main__":
